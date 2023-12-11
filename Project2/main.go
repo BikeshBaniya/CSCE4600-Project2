@@ -8,8 +8,6 @@ import (
 	"os/exec"
 	"os/user"
 	"strings"
-
-	"github.com/BikeshBaniya/CSCE4600/Project2/builtins"
 )
 
 func main() {
@@ -68,22 +66,110 @@ func handleInput(w io.Writer, input string, exit chan<- struct{}) error {
 	input = strings.TrimSpace(input)
 
 	// Split the input separate the command name and the command arguments.
-	args := strings.Split(input, " ")
-	name, args := args[0], args[1:]
+	args := strings.Fields(input)
 
-	// Check for built-in commands.
-	// New builtin commands should be added here. Eventually this should be refactored to its own func.
-	switch name {
-	case "cd":
-		return builtins.ChangeDirectory(args...)
-	case "env":
-		return builtins.EnvironmentVariables(w, args...)
-	case "exit":
-		exit <- struct{}{}
+	if len(args) == 0 {
+		// Empty input, ignore.
 		return nil
 	}
 
+	name, args := args[0], args[1:]
+
+	// Check for built-in commands.
+	switch name {
+	case "cd":
+		return ChangeDirectory(args...)
+	case "env":
+		return EnvironmentVariables(w, args...)
+	case "exit":
+		exit <- struct{}{}
+		return nil
+	case "echo":
+		return Echo(w, args...)
+	case "pwd":
+		return PrintWorkingDirectory(w)
+	case "history":
+		return History(w, args...)
+	case "mkdir":
+		return MakeDirectory(args...)
+	case "rm":
+		return RemoveFile(args...)
+	}
+
 	return executeCommand(name, args...)
+}
+
+func ChangeDirectory(args ...string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("cd: missing argument")
+	}
+	return os.Chdir(args[0])
+}
+
+func EnvironmentVariables(w io.Writer, args ...string) error {
+	if len(args) == 0 {
+		// Print all environment variables if no arguments provided.
+		for _, envVar := range os.Environ() {
+			_, _ = fmt.Fprintln(w, envVar)
+		}
+		return nil
+	}
+	// Otherwise, print the value of the specified environment variable.
+	for _, arg := range args {
+		value, exists := os.LookupEnv(arg)
+		if exists {
+			_, _ = fmt.Fprintf(w, "%s=%s\n", arg, value)
+		} else {
+			_, _ = fmt.Fprintf(w, "%s not found in environment variables\n", arg)
+		}
+	}
+	return nil
+}
+
+func Echo(w io.Writer, args ...string) error {
+	_, _ = fmt.Fprintln(w, strings.Join(args, " "))
+	return nil
+}
+
+func PrintWorkingDirectory(w io.Writer) error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintln(w, wd)
+	return nil
+}
+
+func History(w io.Writer, args ...string) error {
+	// Placeholder for history command implementation.
+	_, _ = fmt.Fprintln(w, "History command is not implemented yet.")
+	return nil
+}
+
+func MakeDirectory(args ...string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("mkdir: missing operand")
+	}
+	for _, dir := range args {
+		err := os.Mkdir(dir, os.ModePerm)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func RemoveFile(args ...string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("rm: missing operand")
+	}
+	for _, file := range args {
+		err := os.Remove(file)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func executeCommand(name string, arg ...string) error {
